@@ -132,6 +132,26 @@ machine/device_is_start → {orderNo} 轮询启动状态（最多 10 次 × 1s�
 - 任何一步失败都会停在「完成」页对应步骤、把原因写进副标题并 toast，**不会假装成功**。
   错误文案里带服务端 `code`（例如 `未登录（2）`），方便判断是签名、token 还是参数问题。
 
+## 吹风计时（墙钟锚点）
+
+倒计时**不是进程里的递减计数器**，而是只存一个「结束时刻」`endAt`（epoch ms），剩余时间每次由
+`endAt - System.currentTimeMillis()` 算出来，并且落盘到 DataStore（`Session.run*`）。
+
+- 计时起点 = **支付成功那一刻**（`beginRun()` 紧跟 `confirmPaid()`），不是「设备启动成功」，
+  也不是「用户切回 App」。去支付宝付款、切微信、退到桌面这段时间设备一样在吹，都算进去。
+- 冷启动 / 进程被杀后重开：`restoreRun()` 读回 `endAt`，还没吹完就直接进「吹风中」页接着倒计时。
+- 到点：`endAt=0` + 清盘 + toast「吹风结束」；`stop()` 手动结束同样清盘。
+- 界面每秒 `tick` 一次触发重组，`running` / `remain` / `progress` 都是 `endAt` 的派生值。
+
+## 历史订单
+
+首页底部「历史订单」→ `Screen.HISTORY` → `BreezeRepo.orders(page, size)`：
+
+- 接口 `order/list`，body 只有 `{page, pageSize}`（`ApiService.java:796`，调用点 `MyViewModel.getOrderList`）。
+- 列表键是 `data.items`（**不是** `list`/`records`），一次取 20 条。
+- 卡片字段：`machineName`（设备）、`shopName`、`createTime`、`markMinutes`、`payPrice`（缺省回落 `markPrice`）。
+- 状态文案与官方一致：`0` 未支付 / `1` 支付超时 / `2` 已支付 / `3` 已完成 / `4` 退款中 / `5` 已退款。
+
 ## 数据从哪来
 
 扫码后的设备名、时长档位、支付渠道**全部来自服务端**，代码里没有写死价格：
@@ -160,6 +180,8 @@ machine/device_is_start → {orderNo} 轮询启动状态（最多 10 次 × 1s�
 | 相机扫码（竖屏 CameraX + ZXing） | ⚠️ 编译通过、权限/绑定逻辑已写，**未上真机验证** |
 | 建单 → 支付宝 → 启动 | ⚠️ 代码已按逆向出的参数接好，**尚未实盘跑过**（会真花钱、真启动设备） |
 | 微信支付 | ⚠️ SDK 与回调已接好，但 appid 是原 App 在开放平台注册的，**签名不匹配会被微信拒**（界面会显示 errCode） |
+| 吹风倒计时（墙钟 + 落盘恢复） | ⚠️ 逻辑已改完并编译通过，**未上真机验证**（退出 App / 杀进程后回来数字应对得上） |
+| 历史订单（order/list） | ⚠️ 接口与字段已实测，**界面未上真机验证** |
 
 实盘验证建议：先在 `../tools/qiekj_client.py` 里跑一遍只读链路确认 token 有效，
 再用本 APK 扫一台空闲机器、选最便宜那档，确认「完成」页四步都变绿。
