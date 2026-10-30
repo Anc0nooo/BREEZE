@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pangguai.breeze.data.Screen
+import com.pangguai.breeze.data.Updater
 import com.pangguai.breeze.ui.DoneScreen
 import com.pangguai.breeze.ui.HistoryScreen
 import com.pangguai.breeze.ui.HomeScreen
@@ -141,8 +144,56 @@ fun BreezeRoot(vm: BreezeViewModel = viewModel()) {
         )
     }
 
-    if (manualInput) {
+    vm.update?.let { info ->
+        val downloading = vm.updateDl >= 0f
         AlertDialog(
+            onDismissRequest = { if (!info.force) vm.dismissUpdate() },
+            title = { Text("发现新版本 ${info.versionName}") },
+            text = {
+                Column {
+                    Text("当前版本 ${Updater.currentVersion()}", color = Ink.dim2, fontSize = 12.sp)
+                    if (info.notes.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(info.notes, color = Ink.text, fontSize = 13.sp)
+                    }
+                    vm.updateErr?.let {
+                        Spacer(Modifier.height(10.dp))
+                        Text(it, color = Ink.mint2, fontSize = 12.sp)
+                    }
+                    if (downloading) {
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { vm.updateDl.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Ink.mint,
+                            trackColor = Ink.line,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text("正在下载 ${(vm.updateDl * 100).toInt()}%", color = Ink.dim2, fontSize = 11.sp)
+                    } else if (info.size > 0) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "安装包 ${String.format("%.1f", info.size / 1048576f)} MB",
+                            color = Ink.dim2,
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.startUpdate() }, enabled = !downloading) {
+                    Text(if (downloading) "下载中…" else "立即更新")
+                }
+            },
+            dismissButton = {
+                if (!info.force) {
+                    TextButton(onClick = { vm.dismissUpdate() }) { Text("稍后") }
+                }
+            },
+        )
+    }
+
+    if (manualInput) {        AlertDialog(
             onDismissRequest = { manualInput = false },
             title = { Text("输入设备号") },
             text = {

@@ -71,6 +71,36 @@ app/
 
 也可以直接用 Android Studio 打开 `app` 目录（Studio 自带 JBR 是 25，编译建议改用上面的 JDK 21）。
 
+## 发版与自动更新
+
+思路：不经过应用商店，APK 自己从你的服务器检查新版本、下载、调起系统安装器覆盖安装。
+
+```powershell
+# 1. 改版本号（versionCode 必须递增，否则手机端不会认为有新版本）
+notepad app\version.properties      # versionCode=3  versionName=1.2.0
+
+# 2. 打正式包（固定签名，可覆盖升级）
+.\toolchain\build.ps1 -Release
+#    产物：dist\breeze-1.2.0.apk + dist\latest.json
+
+# 3. 传到 https 目录
+.\toolchain\deploy.ps1 -Ssh root@你的服务器 -RemoteDir /var/www/breeze
+#    或目录已挂载：.\toolchain\deploy.ps1 -LocalDir D:\www\breeze
+```
+
+三个必须记住的点：
+
+1. **签名是命门**。`toolchain\keystore\breeze-release.jks`（alias `breeze`，密码见
+   `app\keystore.properties`）丢了就再也没法覆盖升级，只能让所有人卸载重装。请备份。
+2. **`updateBase` 必须是 https 且以 `/` 结尾**，指向放 `latest.json` 的目录；改完要重新
+   打一次包（这个值编进了 `BuildConfig.UPDATE_BASE`）。App 里 `usesCleartextTraffic=false`，
+   所以 http 地址拿不到更新。
+3. **`latest.json` 的 `versionCode` 只要大于手机上装的那版**，App 下次启动就会弹更新框；
+   首页底部那行 `v1.1.0（2）· 检查更新` 也能手动触发。
+
+更新是怎么装的：`PackageInstaller` 开会话写入 APK → 系统弹「是否安装」→ 确认后覆盖。
+不需要存储权限、不用 FileProvider；第一次会让你允许「安装未知应用」。
+
 ## 登录
 
 没有 token 什么都做不了（连 `goods/scan/v2` 都算未登录），所以第一屏是登录页：
@@ -182,6 +212,7 @@ machine/device_is_start → {orderNo} 轮询启动状态（最多 10 次 × 1s�
 | 微信支付 | ⚠️ SDK 与回调已接好，但 appid 是原 App 在开放平台注册的，**签名不匹配会被微信拒**（界面会显示 errCode） |
 | 吹风倒计时（墙钟 + 落盘恢复） | ⚠️ 逻辑已改完并编译通过，**未上真机验证**（退出 App / 杀进程后回来数字应对得上） |
 | 历史订单（order/list） | ⚠️ 接口与字段已实测，**界面未上真机验证** |
+| 自动更新（检查 → 下载 → 覆盖安装） | ⚠️ 已编译、`latest.json` 已生成、`deploy.ps1` 自测通过，**未在真机上走完整更新流程**（取决于 `updateBase` 是否配好） |
 
 实盘验证建议：先在 `../tools/qiekj_client.py` 里跑一遍只读链路确认 token 有效，
 再用本 APK 扫一台空闲机器、选最便宜那档，确认「完成」页四步都变绿。

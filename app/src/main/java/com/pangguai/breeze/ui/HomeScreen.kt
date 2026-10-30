@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pangguai.breeze.BreezeViewModel
+import com.pangguai.breeze.data.Updater
 import com.pangguai.breeze.ui.theme.Ink
 
 @Composable
@@ -88,6 +89,18 @@ fun HomeScreen(
             Spacer(Modifier.width(10.dp))
             GhostButton("历史订单", Modifier.weight(1f), onHistory)
         }
+        Spacer(Modifier.height(10.dp))
+
+        // 版本号做成「检查更新」的入口：点一下主动问服务端，有新版就弹下载框
+        Text(
+            "v" + Updater.currentVersion() + " · 检查更新",
+            color = Ink.dim2,
+            fontSize = 10.sp,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .clickable { vm.checkUpdate(manual = true) }
+                .padding(vertical = 6.dp),
+        )
         Spacer(Modifier.height(10.dp))
 
         if (vm.orderNo.isNotBlank()) {

@@ -1,8 +1,26 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// 版本号 + 自动更新地址放在 version.properties，改版本只需要动这一个文件。
+val versionProps = Properties().apply {
+    val f = rootProject.file("version.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val appVersionCode = (versionProps.getProperty("versionCode") ?: "1").trim().toInt()
+val appVersionName = (versionProps.getProperty("versionName") ?: "1.0.0").trim()
+val updateBase = (versionProps.getProperty("updateBase") ?: "https://example.com/breeze/").trim()
+
+// 正式签名：没有 keystore.properties 时退回 debug 签名，保证别人 clone 下来也能编。
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProps.getProperty("storeFile") != null
 
 android {
     namespace = "com.pangguai.breeze"
@@ -12,12 +30,25 @@ android {
         applicationId = "com.pangguai.breeze"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+        buildConfigField("String", "UPDATE_BASE", "\"$updateBase\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     compileOptions {
@@ -31,11 +62,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // 不开 R8：支付宝/微信 SDK 都有反射与 JNI，混淆规则没实测过，
+            // 自用 App 体积多 1~2MB 完全能接受，稳比小重要。
+            isMinifyEnabled = false
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"

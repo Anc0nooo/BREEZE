@@ -17,6 +17,8 @@ import com.pangguai.breeze.data.SessionExpired
 import com.pangguai.breeze.data.StepPhase
 import com.pangguai.breeze.data.StepState
 import com.pangguai.breeze.data.StoredRun
+import com.pangguai.breeze.data.UpdateInfo
+import com.pangguai.breeze.data.Updater
 import com.pangguai.breeze.data.Wechat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -149,6 +151,8 @@ class BreezeViewModel(app: Application) : AndroidViewModel(app) {
                 r?.lastPhone?.takeIf { it.length == 11 }?.let { phoneInput = it }
                 screen = Screen.LOGIN
             }
+            // 顺手问一次有没有新版；连不上/服务端没配就直接放弃，绝不挡人用
+            checkUpdate()
         }
         viewModelScope.launch {
             var wasRunning = false
@@ -662,6 +666,68 @@ class BreezeViewModel(app: Application) : AndroidViewModel(app) {
         val now = java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(java.util.Date())
         val rand = (1000..9999).random()
         return "$now$rand"
+    }
+
+    // ---- 自带更新 ----
+    var update by mutableStateOf<UpdateInfo?>(null)
+        private set
+
+    /** <0 未开始下载，0..1 下载进度。 */
+    var updateDl by mutableStateOf(-1f)
+        private set
+
+    var updateErr by mutableStateOf<String?>(null)
+        private set
+
+    private var updateChecking by mutableStateOf(false)
+
+    /** [manual] = 用户手动点的「检查更新」，没新版/没网时给个提示；自动检查则完全静默。 */
+    fun checkUpdate(manual: Boolean = false) {
+        if (updateChecking) return
+        updateChecking = true
+        viewModelScope.launch {
+            if (manual) {
+                runCatching { Updater.checkOrThrow() }.fold(
+                    onSuccess = { info ->
+                        updateChecking = false
+                        if (info != null) update = info
+                        else toast = "已是最新版 ${Updater.currentVersion()}"
+                    },
+                    onFailure = { e ->
+                        updateChecking = false
+                        toast = e.message ?: "检查更新失败"
+                    },
+                )
+            } else {
+                val info = runCatching { Updater.check() }.getOrNull()
+                updateChecking = false
+                if (info != null) update = info
+            }
+        }
+    }
+
+    fun startUpdate() {
+        val info = update ?: return
+        val ctx = getApplication<Application>()
+        if (updateDl >= 0f) return
+        updateErr = null
+        updateDl = 0f
+        viewModelScope.launch {
+            runCatching {
+                val f = Updater.download(ctx, info) { p -> updateDl = p }
+                updateDl = 1f
+                Updater.install(ctx, f)
+            }.onFailure {
+                updateErr = it.message ?: "更新失败"
+                updateDl = -1f
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        update = null
+        updateDl = -1f
+        updateErr = null
     }
 
     companion object {

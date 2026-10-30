@@ -1,0 +1,28 @@
+# ---- Android / Gradle ----
+.gradle/
+.kotlin/
+build/
+app/build/
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---- 本机配置：路径 + 签名口令，绝不能进仓库 ----
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# ---- 构建产物 ----
+dist/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# ---- 其它 ----
+.DS_Store
+Thumbs.db
+*.log
