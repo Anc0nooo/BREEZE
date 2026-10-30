@@ -46,9 +46,9 @@ gradle assembleDebug            # 产物 app/build/outputs/apk/debug/app-debug.a
 # 或直接用 Android Studio 打开本目录（Gradle 根工程就是仓库根）
 ```
 
-推送到 `master` 会触发 GitHub Actions（见 [.github/workflows/build-apk.yml](.github/workflows/build-apk.yml)）：
-自动装 SDK、跑 `assembleDebug`、把 APK 传到 Actions Artifacts，并刷新 `latest` 这个 Release。
-**CI 出的是 debug 变体，包名带 `.debug`，可以和正式包同时装在手机上。**
+推送到 `master` 会触发 GitHub Actions（见 [.github/workflows/build-release.yml](.github/workflows/build-release.yml)）：
+自动装 SDK、出 debug 包（Artifacts）、配好签名密钥时再出**正式版 Release**（APK + `latest.json`）。
+debug 变体的包名带 `.debug`，可以和正式包同时装在一台手机上。
 
 Windows 本地用我的工具链的话：
 
@@ -64,20 +64,60 @@ Windows 本地用我的工具链的话：
 
 ## 发版与自动更新
 
-不走应用商店：APK 从自己的 https 目录检查新版本、下载、调起系统安装器覆盖安装。
+不走应用商店：APK 自己查 `latest.json` → 下载 → 调起系统安装器覆盖安装。更新源有两种，**推荐 GitHub Releases**。
+
+### 方式一：GitHub Releases（默认，什么都不用托管）
+
+`version.properties` 里默认的 `updateBase` 就是：
+
+```
+https://github.com/Anc0nooo/BREEZE/releases/latest/download/
+```
+
+推送 `master` 后 CI 会做三件事：出 debug 包（Artifacts）、出**正式签名包**、把
+`breeze-<versionName>.apk` 和 `latest.json` 挂到一个**正式版 Release**（tag `v<versionName>`）。
+`releases/latest/download/` 这个地址永远指向最新的非预览版 Release，所以 App 里写死它就够了。
+
+配一次 Secrets 就行（Settings → Secrets and variables → Actions）：
+
+| Secret | 内容 |
+|---|---|
+| `KEYSTORE_BASE64` | 签名文件的 base64（**单行**） |
+| `KEYSTORE_PASSWORD` | storePassword |
+| `KEY_ALIAS` | keyAlias（本项目是 `breeze`） |
+| `KEY_PASSWORD` | keyPassword |
+
+```bash
+# 生成第一项（-w0 保证单行，别让 base64 折行）
+base64 -w0 toolchain/keystore/breeze-release.jks
+# Windows PowerShell:
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("toolchain\keystore\breeze-release.jks"))
+```
+
+没配这四项也能跑，只是只会出 debug 包（工作流会打一条 warning）——因为**签名必须是同一把**，
+用 debug key 签出来的包装不到正式版上面。
+
+发一版就是：
+
+```bash
+# 1. 改版本号（versionCode 必须递增，否则手机不会认为有新版本）
+#    versionCode=5  versionName=1.2.1
+# 2. push
+git push
+# 3. 等 Actions 绿了，手机下次启动自动弹更新
+```
+
+### 方式二：自己的服务器
 
 ```powershell
-# 1. 改版本号（versionCode 必须递增，否则手机不会认为有新版本）
-notepad version.properties          # versionCode=4  versionName=1.2.0
+# 打包时不写 GitHub 地址，改成自己的 https 目录
+.\toolchain\build.ps1 -Release -UpdateBase https://your.domain/breeze/
+# → dist\breeze-1.2.0.apk + dist\latest.json
 
-# 2. 打正式包（固定签名 → 能覆盖升级）
-.\toolchain\build.ps1 -Release      # dist\breeze-1.2.0.apk + dist\latest.json
-
-# 3. 传到 https 目录
 .\toolchain\deploy.ps1 -Ssh root@你的服务器 -RemoteDir /var/www/breeze
 ```
 
-服务器上只需要两个文件：
+服务器上只需要两个文件，和 Release 里那两个 asset 是同一份东西：
 
 ```
 https://your.domain/breeze/latest.json
@@ -97,13 +137,17 @@ https://your.domain/breeze/breeze-1.2.0.apk
 }
 ```
 
-三条必须记住的：
+### 四条必须记住的
 
-1. **签名是命门。** `toolchain/keystore/breeze-release.jks` 丢了，线上所有人就再也收不到覆盖升级，只能卸载重装。请单独备份（口令在本地 `keystore.properties`，不入库）。
-2. **`updateBase` 必须 https、以 `/` 结尾**，改完要重新打包（这个值编译进了 `BuildConfig.UPDATE_BASE`）。App 里 `usesCleartextTraffic=false`，http 地址拿不到更新。
-3. **静态站如果开了 SPA 回退**（`try_files $uri $uri/ /index.html`），`/breeze/latest.json` 不存在时会回 200 + 一段 HTML，App 会明确报「更新地址返回的是网页而不是 JSON」——给这个目录单独加一条 `location /breeze/ { root …; try_files $uri =404; }` 就好。
+1. **签名是命门。** `toolchain/keystore/breeze-release.jks` 丢了，线上所有人就再也收不到覆盖升级，只能卸载重装。请单独备份（口令在本地 `keystore.properties`，**不入库**）。
+2. **`updateBase` 必须 https、以 `/` 结尾**，改完要重新打包（这个值编译进了 `BuildConfig.UPDATE_BASE`）。App 里 `usesCleartextTraffic=false`，http 地址拿不到更新。优先级：`-PupdateBase=` > 环境变量 `BREEZE_UPDATE_BASE` > `version.properties`。
+3. **`versionCode` 只增不减**，App 只比较它。
+4. **静态站如果开了 SPA 回退**（`try_files $uri $uri/ /index.html`），`/breeze/latest.json` 不存在时会回 200 + 一段 HTML，App 会明确报「更新地址返回的是网页而不是 JSON」——给这个目录单独加一条 `location /breeze/ { root …; try_files $uri =404; }` 就好。
 
 安装动作走 `PackageInstaller` 会话（`MODE_FULL_INSTALL`）：不需要存储权限、不用 FileProvider，第一次会让你允许「安装未知应用」。
+
+> 换过签名或换过 `updateBase` 的那一版，老用户要先**手动装一次**；从下一个版本起才会自动更新。
+> （1.1.x 发布时 `updateBase` 指向自建站，1.2.0 改成 GitHub，所以 1.1.x 用户手动装一次 1.2.0 之后就自动跟 GitHub 走了。）
 
 ## 技术要点
 

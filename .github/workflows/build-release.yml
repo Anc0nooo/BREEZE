@@ -1,0 +1,180 @@
+name: Build & Release
+
+# 推 master 就出包：
+#   1. 永远产出 debug APK（Artifacts，包名带 .debug，随便装不冲突）
+#   2. 配了签名密钥时，额外产出**正式版** Release：
+#      breeze-<versionName>.apk + latest.json 两个 asset，
+#      https://github.com/<owner>/<repo>/releases/latest/download/ 永远指向它
+#      —— 这就是 App 里 updateBase 默认值，所以别人 fork 之后什么都不用托管。
+#
+# 需要的 4 个 Secrets（Settings → Secrets and variables → Actions）：
+#   KEYSTORE_BASE64     签名文件 base64（单行）
+#   KEYSTORE_PASSWORD   storePassword
+#   KEY_ALIAS           keyAlias
+#   KEY_PASSWORD        keyPassword
+# 生成 base64：bash: base64 -w0 breeze-release.jks
+#              powershell: [Convert]::ToBase64String([IO.File]::ReadAllBytes("breeze-release.jks"))
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version_code: ${{ steps.meta.outputs.version_code }}
+      version_name: ${{ steps.meta.outputs.version_name }}
+      signed: ${{ steps.meta.outputs.signed }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Android SDK 35
+        run: |
+          set -e
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: 读版本号 / 判断能不能出正式包
+        id: meta
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          set -e
+          vc=$(sed -n 's/^versionCode=//p' version.properties | tr -d ' \r')
+          vn=$(sed -n 's/^versionName=//p' version.properties | tr -d ' \r')
+          echo "version_code=$vc" >> "$GITHUB_OUTPUT"
+          echo "version_name=$vn" >> "$GITHUB_OUTPUT"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "versionCode=$vc versionName=$vn -> 正式包"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::没有 KEYSTORE_BASE64，只出 debug 包。配好 4 个 secrets 才会发正式版。"
+          fi
+
+      - name: 编译 debug 包
+        run: gradle assembleDebug --no-daemon --console=plain
+
+      - name: 上传 debug 包
+        uses: actions/upload-artifact@v4
+        with:
+          name: breeze-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: 还原签名密钥
+        if: steps.meta.outputs.signed == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KS_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+          mkdir -p toolchain/keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > toolchain/keystore/breeze-release.jks
+          {
+            echo "storeFile=../toolchain/keystore/breeze-release.jks"
+            echo "storePassword=$KS_PASSWORD"
+            echo "keyAlias=$KS_ALIAS"
+            echo "keyPassword=$KS_KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: 编译正式包
+        if: steps.meta.outputs.signed == 'true'
+        run: |
+          set -e
+          gradle assembleRelease --no-daemon --console=plain
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk \
+             "dist/breeze-${{ steps.meta.outputs.version_name }}.apk"
+
+      - name: 生成 latest.json
+        if: steps.meta.outputs.signed == 'true'
+        run: |
+          set -e
+          NAME="breeze-${{ steps.meta.outputs.version_name }}.apk"
+          SIZE=$(stat -c%s "dist/$NAME")
+          {
+            echo "{"
+            echo "  \"versionCode\": ${{ steps.meta.outputs.version_code }},"
+            echo "  \"versionName\": \"${{ steps.meta.outputs.version_name }}\","
+            echo "  \"url\": \"$NAME\","
+            echo "  \"notes\": \"GitHub Actions 构建 ${GITHUB_SHA::7}\","
+            echo "  \"size\": $SIZE,"
+            echo "  \"force\": false"
+            echo "}"
+          } > dist/latest.json
+          echo "--- latest.json ---"
+          cat dist/latest.json
+          echo "--- 产物 ---"
+          ls -lh dist/
+          sha256sum dist/*.apk
+
+      - name: 发布正式版
+        if: steps.meta.outputs.signed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version_name }}
+          name: v${{ steps.meta.outputs.version_name }}
+          prerelease: false
+          draft: false
+          make_latest: true
+          allowUpdates: true
+          body: |
+            **v${{ steps.meta.outputs.version_name }}**（versionCode `${{ steps.meta.outputs.version_code }}`）
+
+            正式签名包，可以直接覆盖安装上一版。
+
+            ```text
+            更新源  https://github.com/${{ github.repository }}/releases/latest/download/
+            清单    latest.json
+            安装包  breeze-${{ steps.meta.outputs.version_name }}.apk
+            ```
+
+            自己托管也可以：把下面两个 asset 丢到任意 https 目录，
+            再把 `version.properties` 里的 `updateBase` 指过去重新打包即可。
+          files: |
+            dist/breeze-${{ steps.meta.outputs.version_name }}.apk
+            dist/latest.json
+
+      - name: 校验更新源
+        if: steps.meta.outputs.signed == 'true'
+        run: |
+          set -e
+          # Release 刚建好，releases/latest 有几秒延迟，最多等 60s
+          URL="https://github.com/${{ github.repository }}/releases/latest/download/latest.json"
+          for i in $(seq 1 12); do
+            CODE=$(curl -sL -o /tmp/latest.json -w '%{http_code}' "$URL" || true)
+            if [ "$CODE" = "200" ]; then
+              echo "OK $URL"
+              cat /tmp/latest.json
+              exit 0
+            fi
+            echo "第 $i 次：HTTP $CODE，等 5s"
+            sleep 5
+          done
+          echo "::error::更新源不可用：$URL"
+          exit 1

@@ -13,7 +13,15 @@ val versionProps = Properties().apply {
 }
 val appVersionCode = (versionProps.getProperty("versionCode") ?: "1").trim().toInt()
 val appVersionName = (versionProps.getProperty("versionName") ?: "1.0.0").trim()
-val updateBase = (versionProps.getProperty("updateBase") ?: "https://example.com/breeze/").trim()
+
+// 更新源优先级：命令行 -PupdateBase=… > 环境变量 BREEZE_UPDATE_BASE > version.properties。
+// 这样同一个 commit 既能指向自己的服务器，也能指向 GitHub Release（见 CI 注释）。
+val updateBase = (
+    project.findProperty("updateBase") as String?
+        ?: System.getenv("BREEZE_UPDATE_BASE")
+        ?: versionProps.getProperty("updateBase")
+        ?: "https://github.com/Anc0nooo/BREEZE/releases/latest/download/"
+    ).trim().let { if (it.endsWith("/")) it else "$it/" }
 
 // 正式签名：没有 keystore.properties 时退回 debug 签名，保证别人 clone 下来也能编。
 val keystoreProps = Properties().apply {
