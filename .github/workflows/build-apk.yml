@@ -1,0 +1,68 @@
+name: Build APK
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # 项目不用 gradle wrapper（wrapper 校验在部分网络下会失败），直接装发行版
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Install Android SDK (platform 35 + build-tools 35.0.0)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found at $SDKMANAGER" >&2
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --console=plain
+
+      - name: Copy APK to dist
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/breeze-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: breeze-debug-apk
+          path: dist/breeze-debug.apk
+          if-no-files-found: error
+
+      # 每次构建成功后刷新 Release 页面的“最新构建”，方便直接下载
+      - name: Publish to GitHub Release (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: 最新构建
+          body: |
+            自动构建的调试版 APK（debug 变体，applicationId 带 .debug 后缀）。
+            Commit: ${{ github.sha }}
+            触发方式: ${{ github.event_name }}
+          files: dist/breeze-debug.apk
+          allowUpdates: true
+          update_release_body: true
+          prerelease: true
