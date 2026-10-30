@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>轻风 · 界面原型（吹风 / 扫码 / 支付 / 完成）</title>
+<style>
+  :root{
+    --bg:#080E0C; --card:#111B17; --card-2:#16231D; --line:#22322B;
+    --teal:#1D9E75; --teal-l:#5DCAA5; --teal-d:#0F5E46;
+    --text:#E9F4EF; --muted:#7E958C; --warn:#E4B363;
+    --r:18px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 50% -10%,#12241D 0%,#080E0C 55%,#050807 100%);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--text); display:flex; align-items:center; justify-content:center; gap:28px;
+    padding:24px; flex-wrap:wrap;
+  }
+  /* ---------- 手机壳 ---------- */
+  .phone{
+    width:390px; height:844px; border-radius:44px; position:relative;
+    background:#000; padding:10px; box-shadow:0 40px 90px rgba(0,0,0,.65), 0 0 0 1px #1b2621;
+    flex:0 0 auto;
+  }
+  .viewport{
+    width:100%; height:100%; border-radius:35px; overflow:hidden; position:relative;
+    background:var(--bg);
+  }
+  .statusbar{
+    height:46px; display:flex; align-items:flex-end; justify-content:space-between;
+    padding:0 26px 6px; font-size:12.5px; color:#cfdfd7; letter-spacing:.4px; position:relative; z-index:5;
+  }
+  .statusbar .right{display:flex; gap:5px; align-items:center; opacity:.85}
+  .screen{
+    position:absolute; inset:46px 0 0 0; padding:0 20px 24px;
+    display:none; flex-direction:column; overflow:hidden;
+  }
+  .screen.active{display:flex; animation:fade .28s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---------- 通用 ---------- */
+  .top{display:flex; align-items:center; justify-content:space-between; padding:8px 0 18px}
+  .icon-btn{
+    width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+    display:grid;place-items:center;color:var(--text);cursor:pointer; transition:.18s;
+  }
+  .icon-btn:hover{border-color:var(--teal); color:var(--teal-l)}
+  .title{font-size:16px;font-weight:600;letter-spacing:.3px}
+  .muted{color:var(--muted); font-size:12.5px; line-height:1.7}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;
+    background:var(--card);border:1px solid var(--line);font-size:12.5px;color:#cfe3da;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--teal-l);box-shadow:0 0 8px var(--teal-l)}
+  .btn{
+    width:100%;height:56px;border-radius:16px;border:0;cursor:pointer;
+    background:linear-gradient(180deg,#22B183,#178A66); color:#04150F; font-weight:700; font-size:16.5px;
+    letter-spacing:.5px; box-shadow:0 10px 26px rgba(29,158,117,.35); transition:.18s;
+  }
+  .btn:hover{filter:brightness(1.07)}
+  .btn:active{transform:scale(.985)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);box-shadow:none;font-weight:600}
+  .spacer{flex:1}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+
+  /* ---------- 1 吹风（首页） ---------- */
+  .home-hero{margin:4px 0 10px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .brand h1{font-size:22px;margin:0;letter-spacing:2px;font-weight:600}
+  .brand .sub{font-size:11.5px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
+  .scan-zone{flex:1;display:flex;align-items:center;justify-content:center;position:relative;margin:-10px 0}
+  .scan-btn{
+    width:236px;height:236px;border-radius:50%;border:0;cursor:pointer;position:relative;
+    background:radial-gradient(circle at 50% 35%,#25B98A,#12684F 70%,#0C4A39);
+    color:#031610;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    box-shadow:0 0 0 1px rgba(93,202,165,.35),0 24px 60px rgba(29,158,117,.32),inset 0 2px 18px rgba(255,255,255,.18);
+    transition:.2s;
+  }
+  .scan-btn:active{transform:scale(.97)}
+  .scan-btn svg{width:64px;height:64px;stroke:#04150F}
+  .scan-btn span{font-size:17px;font-weight:700;letter-spacing:3px}
+  .scan-btn::after{
+    content:"";position:absolute;inset:-14px;border-radius:50%;border:1px solid rgba(93,202,165,.22);
+    animation:pulse 2.6s ease-out infinite;
+  }
+  @keyframes pulse{0%{transform:scale(.94);opacity:.9}70%{transform:scale(1.14);opacity:0}100%{opacity:0}}
+  .home-actions{display:flex;gap:12px;margin:18px 0 14px}
+  .home-actions .btn{height:48px;font-size:14.5px}
+  .last-order{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .last-order .ico{width:36px;height:36px;border-radius:11px;background:var(--card-2);display:grid;place-items:center;color:var(--teal-l)}
+  .last-order .t{flex:1;min-width:0}
+  .last-order .t b{font-size:13.5px;font-weight:600}
+  .last-order .t div{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .last-order .amt{font-size:14px;color:var(--teal-l);font-weight:700}
+
+  /* ---------- 2 扫码 ---------- */
+  .scanner{
+    flex:1;position:relative;border-radius:22px;overflow:hidden;background:
+      linear-gradient(160deg,#0d1a15,#050a08 60%), repeating-linear-gradient(0deg,#0b1512 0 2px,#0a1310 2px 4px);
+    border:1px solid var(--line);margin-bottom:18px;
+  }
+  .scanner .grid{position:absolute;inset:0;opacity:.25;
+    background-image:linear-gradient(rgba(93,202,165,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(93,202,165,.08) 1px,transparent 1px);
+    background-size:28px 28px}
+  .frame{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:230px;height:230px}
+  .frame i{position:absolute;width:42px;height:42px;border:3px solid var(--teal-l);border-radius:6px}
+  .frame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0}
+  .frame i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0}
+  .frame i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0}
+  .frame i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0}
+  .laser{position:absolute;left:8px;right:8px;height:2px;background:linear-gradient(90deg,transparent,var(--teal-l),transparent);
+    box-shadow:0 0 14px var(--teal-l);animation:scanline 2.2s ease-in-out infinite}
+  @keyframes scanline{0%,100%{top:12px;opacity:.35}50%{top:216px;opacity:1}}
+  .scan-hint{position:absolute;left:0;right:0;bottom:34px;text-align:center;font-size:13px;color:#cfe3da;letter-spacing:.5px}
+  .scan-hint small{display:block;color:var(--muted);margin-top:6px;font-size:11.5px}
+  .scan-foot{display:flex;gap:12px;margin-bottom:10px}
+  .scan-foot .btn{height:46px;font-size:13.5px}
+
+  /* ---------- 3 支付 ---------- */
+  .dev-card{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .dev-card .ico{width:44px;height:44px;border-radius:13px;background:var(--card-2);border:1px solid var(--line);display:grid;place-items:center;color:var(--teal-l)}
+  .dev-card b{font-size:15px;display:block}
+  .dev-card .meta{font-size:11.5px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px}
+  .sec-label{font-size:12px;color:var(--muted);letter-spacing:1px;margin:14px 0 10px}
+  .skus{display:flex;flex-direction:column;gap:10px}
+  .sku{
+    display:flex;align-items:center;gap:14px;padding:15px 16px;border-radius:16px;cursor:pointer;
+    background:var(--card);border:1px solid var(--line);transition:.16s;
+  }
+  .sku:hover{border-color:#2c443a}
+  .sku.on{border-color:var(--teal);background:linear-gradient(180deg,rgba(29,158,117,.16),rgba(29,158,117,.06));
+    box-shadow:0 0 0 1px rgba(29,158,117,.45),0 8px 24px rgba(29,158,117,.12)}
+  .sku .radio{width:20px;height:20px;border-radius:50%;border:1.5px solid #3a4f46;flex:0 0 auto;display:grid;place-items:center}
+  .sku.on .radio{border-color:var(--teal-l)}
+  .sku.on .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--teal-l)}
+  .sku .info{flex:1}
+  .sku .info b{font-size:15.5px;font-weight:600}
+  .sku .info span{font-size:11.5px;color:var(--muted);margin-left:8px}
+  .sku .price{font-size:16px;font-weight:700;color:var(--teal-l)}
+  .channels{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+  .ch{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:13.5px;color:#d6e7df;border-bottom:1px solid rgba(34,50,43,.7)}
+  .ch:last-child{border-bottom:0}
+  .ch .tag{font-size:10.5px;color:var(--warn);border:1px solid rgba(228,179,99,.35);padding:2px 6px;border-radius:6px;margin-left:auto}
+  .ch .tag.ok{color:var(--teal-l);border-color:rgba(93,202,165,.35)}
+  .total-row{display:flex;align-items:flex-end;justify-content:space-between;padding:14px 2px 12px}
+  .total-row .l{font-size:12px;color:var(--muted)}
+  .total-row .v{font-size:26px;font-weight:700;color:var(--teal-l);letter-spacing:-.5px}
+  .total-row .v small{font-size:14px;margin-right:2px}
+
+  /* ---------- 4 完成 / 吹风中 ---------- */
+  .steps{display:flex;flex-direction:column;gap:0;margin:6px 0 4px}
+  .step{display:flex;gap:14px;position:relative;padding-bottom:26px}
+  .step:last-child{padding-bottom:0}
+  .step .bullet{
+    width:26px;height:26px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+    border:1.5px solid #2b3d35;color:transparent;font-size:13px;background:var(--bg);position:relative;z-index:1;transition:.25s;
+  }
+  .step:not(:last-child)::before{content:"";position:absolute;left:12.5px;top:26px;bottom:0;width:1.5px;background:#22322b}
+  .step.done .bullet{background:var(--teal);border-color:var(--teal);color:#04150F}
+  .step.done:not(:last-child)::before{background:linear-gradient(180deg,var(--teal),#22322b)}
+  .step.cur .bullet{border-color:var(--teal-l);color:var(--teal-l);box-shadow:0 0 0 4px rgba(93,202,165,.12)}
+  .step .txt b{font-size:14.5px;font-weight:600;display:block;line-height:26px}
+  .step .txt span{font-size:11.5px;color:var(--muted)}
+  .spin{width:14px;height:14px;border-radius:50%;border:2px solid rgba(93,202,165,.25);border-top-color:var(--teal-l);animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .running{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;margin-top:24px}
+  .wind{width:120px;height:88px;margin-bottom:10px;opacity:.9}
+  .wind path{stroke:var(--teal-l);fill:none;stroke-linecap:round;animation:flow 2.4s ease-in-out infinite}
+  .wind path:nth-child(2){animation-delay:.35s;opacity:.75}
+  .wind path:nth-child(3){animation-delay:.7s;opacity:.5}
+  @keyframes flow{0%,100%{stroke-dasharray:2 10;stroke-dashoffset:0}50%{stroke-dasharray:26 6;stroke-dashoffset:-14}}
+  .count{font-size:74px;font-weight:250;letter-spacing:-3px;font-variant-numeric:tabular-nums;
+    background:linear-gradient(180deg,#EAF7F1,#7FD9BC);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .count-lbl{font-size:12px;color:var(--muted);letter-spacing:3px;margin-top:2px}
+  .progress{width:100%;height:4px;border-radius:99px;background:#1b2a24;overflow:hidden;margin:26px 0 22px}
+  .progress i{display:block;height:100%;width:30%;border-radius:99px;background:linear-gradient(90deg,var(--teal),var(--teal-l));transition:width 1s linear}
+  .order-info{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:12px 10px;font-size:12.5px}
+  .order-info div span{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+  .order-info div b{font-weight:600;color:#dcefe6;font-variant-numeric:tabular-nums}
+
+  /* ---------- 注释区 ---------- */
+  .notes{max-width:360px;font-size:13px;line-height:1.85;color:#a9bdb4}
+  .notes h2{font-size:14px;color:#d6e7df;margin:0 0 10px;letter-spacing:1px}
+  .notes ul{padding-left:16px;margin:0 0 18px}
+  .notes li{margin:5px 0}
+  .notes code{background:#101a16;border:1px solid #1f2e28;border-radius:5px;padding:1px 5px;font-size:11.5px;color:var(--teal-l)}
+  .notes .warnbox{border-left:2px solid var(--warn);padding:8px 0 8px 12px;color:#cbb78f;font-size:12.5px;line-height:1.75}
+  @media (max-width:900px){ .notes{display:none} }
+</style>
+</head>
+<body>
+
+<!-- ============ 手机 ============ -->
+<div class="phone">
+  <div class="viewport">
+    <div class="statusbar">
+      <span>9:41</span>
+      <span class="right">●●●  ⌁  ▮</span>
+    </div>
+
+    <!-- ---------- 1 吹风（首页） ---------- -->
+    <section class="screen active" id="s-home">
+      <div class="top">
+        <span class="pill"><span class="dot"></span>138****8866</span>
+        <span class="pill">小票 ¥12.80</span>
+      </div>
+
+      <div class="home-hero">
+        <div class="brand">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#5DCAA5" stroke-width="1.6" stroke-linecap="round">
+            <path d="M3 8h11a3.5 3.5 0 1 0-3.5-3.5"/><path d="M3 13h14a3.5 3.5 0 1 1-3.5 3.5"/><path d="M3 18h7"/>
+          </svg>
+          <div>
+            <h1>轻风</h1>
+            <div class="sub">BREEZE · 一键吹风</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scan-zone">
+        <button class="scan-btn" onclick="go('s-scan')">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>
+            <path d="M4 12h16" opacity=".55"/>
+          </svg>
+          <span>扫码吹风</span>
+        </button>
+      </div>
+
+      <div class="home-actions">
+        <button class="btn ghost" onclick="go('s-pay')">手动输入设备号</button>
+      </div>
+
+      <div class="last-order">
+        <div class="ico">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 13h14a3 3 0 1 1-3 3"/><path d="M3 18h6"/>
+          </svg>
+        </div>
+        <div class="t">
+          <b>吹风机 · A区3号</b>
+          <div>30 分钟 · 今天 14:22</div>
+        </div>
+        <div class="amt">¥2.50</div>
+      </div>
+    </section>
+
+    <!-- ---------- 2 扫码 ---------- -->
+    <section class="screen" id="s-scan">
+      <div class="top">
+        <div class="icon-btn" onclick="go('s-home')">✕</div>
+        <span class="title">扫一扫</span>
+        <div class="icon-btn" title="手电筒">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <path d="M9 2h6l-1.5 5h-3z"/><path d="M10.5 7v4.5l-3 4.5V21h9v-5l-3-4.5V7"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="scanner">
+        <div class="grid"></div>
+        <div class="frame"><i></i><i></i><i></i><i></i><div class="laser"></div></div>
+        <div class="scan-hint">
+          对准设备上的二维码
+          <small>自动识别，无需手动对焦</small>
+        </div>
+      </div>
+
+      <div class="scan-foot">
+        <button class="btn ghost" onclick="go('s-pay')">从相册选择</button>
+        <button class="btn" onclick="go('s-pay')">输入设备号</button>
+      </div>
+    </section>
+
+    <!-- ---------- 3 支付 ---------- -->
+    <section class="screen" id="s-pay">
+      <div class="top">
+        <div class="icon-btn" onclick="go('s-home')">←</div>
+        <span class="title">确认订单</span>
+        <div style="width:38px"></div>
+      </div>
+
+      <div class="dev-card">
+        <div class="ico">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 13h14a3 3 0 1 1-3 3"/><path d="M3 18h6"/>
+          </svg>
+        </div>
+        <div>
+          <b>吹风机 · A区3号</b>
+          <div class="meta"><span class="dot"></span>设备在线 · 空闲</div>
+        </div>
+      </div>
+
+      <div class="sec-label">选择时长</div>
+      <div class="skus" id="skus">
+        <div class="sku" data-min="15" data-price="1.50" onclick="pick(this)">
+          <span class="radio"></span>
+          <div class="info"><b>15 分钟</b><span>够吹干短发</span></div>
+          <div class="price">¥1.50</div>
+        </div>
+        <div class="sku on" data-min="30" data-price="2.50" onclick="pick(this)">
+          <span class="radio"></span>
+          <div class="info"><b>30 分钟</b><span>默认档 · 大多数人够用</span></div>
+          <div class="price">¥2.50</div>
+        </div>
+        <div class="sku" data-min="60" data-price="4.50" onclick="pick(this)">
+          <span class="radio"></span>
+          <div class="info"><b>60 分钟</b><span>长发 / 多人</span></div>
+          <div class="price">¥4.50</div>
+        </div>
+      </div>
+
+      <div class="sec-label">支付方式 <span style="color:#5b6f66;letter-spacing:0">· 以实测渠道为准</span></div>
+      <div class="channels">
+        <div class="ch"><span class="dot"></span>支付宝免密 <span class="tag ok">推荐</span></div>
+        <div class="ch"><span class="dot"></span>云闪付无感 <span class="tag">备用</span></div>
+        <div class="ch"><span class="dot" style="background:#3a4f46;box-shadow:none"></span>钱包（小票）<span class="tag">需商家开启</span></div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="total-row">
+        <div>
+          <div class="l">合计</div>
+          <div class="muted" id="pay-note">30 分钟 · 含 0.00 服务费</div>
+        </div>
+        <div class="v"><small>¥</small><span id="total">2.50</span></div>
+      </div>
+      <button class="btn" onclick="pay()">立即支付</button>
+    </section>
+
+    <!-- ---------- 4 完成 / 吹风中 ---------- -->
+    <section class="screen" id="s-done">
+      <div class="top">
+        <div class="icon-btn" onclick="go('s-home')">✕</div>
+        <span class="title" id="done-title">处理中</span>
+        <div style="width:38px"></div>
+      </div>
+
+      <!-- 步骤条 -->
+      <div id="steps-box">
+        <div class="steps">
+          <div class="step done" data-step="1"><div class="bullet">✓</div><div class="txt"><b>订单已创建</b><span id="order-no">NO.20261029140233771</span></div></div>
+          <div class="step" data-step="2"><div class="bullet" id="b2">✓</div><div class="txt"><b>支付成功</b><span id="paid-info">支付宝免密 · ¥2.50</span></div></div>
+          <div class="step" data-step="3"><div class="bullet" id="b3"><span class="spin" id="sp3" style="display:none"></span></div><div class="txt"><b>正在启动设备</b><span id="start-info">等待设备响应…</span></div></div>
+          <div class="step" data-step="4"><div class="bullet" id="b4"></div><div class="txt"><b>开始吹风</b><span>倒计时结束后自动停机</span></div></div>
+        </div>
+      </div>
+
+      <!-- 运行态 -->
+      <div class="running" id="running" style="display:none">
+        <svg class="wind" viewBox="0 0 120 88">
+          <path d="M8 24h64a12 12 0 1 0-12-12" stroke-width="3"/>
+          <path d="M8 46h78a12 12 0 1 1-12 12" stroke-width="3"/>
+          <path d="M8 68h44" stroke-width="3"/>
+        </svg>
+        <div class="count" id="count">08:47</div>
+        <div class="count-lbl">剩余吹风时间</div>
+        <div class="progress"><i id="prog"></i></div>
+        <div class="order-info">
+          <div><span>设备</span><b>吹风机 · A区3号</b></div>
+          <div><span>时长</span><b id="i-min">30 分钟</b></div>
+          <div><span>订单号</span><b id="i-no">…3771</b></div>
+          <div><span>金额</span><b id="i-amt">¥2.50</b></div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn ghost" id="done-btn" onclick="go('s-home')" style="display:none">结束</button>
+    </section>
+  </div>
+</div>
+
+<!-- ============ 说明 ============ -->
+<div class="notes">
+  <h2>轻风 · 界面原型（可点）</h2>
+  <ul>
+    <li><b>吹风</b> → 大圆按钮是唯一主操作</li>
+    <li><b>扫码</b> → ZXing 相机页，四角框 + 扫描线</li>
+    <li><b>支付</b> → 选档 + 渠道 + 一键支付（档位/渠道来自服务端，不写死）</li>
+    <li><b>完成</b> → 步骤条串完 建单→支付→启动，再转倒计时</li>
+  </ul>
+  <div class="warnbox">
+    页面内数字均为占位：<code>skuId / 时长 / 价格 / 渠道</code> 要等抓包（或 Python 直连实测）拿到
+    <code>goods/normal/skus</code> 与 <code>payChannelRoute/prePay</code> 的真实返回再定。
+  </div>
+</div>
+
+<script>
+  const T = {
+    total: 30 * 60,          // 本次时长（秒）
+    left: 8 * 60 + 47,       // 演示初始剩余
+    timer: null
+  };
+
+  function go(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+    if (id === 's-done') resetDone();
+  }
+
+  function pick(el){
+    document.querySelectorAll('#skus .sku').forEach(s => s.classList.remove('on'));
+    el.classList.add('on');
+    const price = el.dataset.price, min = el.dataset.min;
+    document.getElementById('total').textContent = price;
+    document.getElementById('pay-note').textContent = min + ' 分钟 · 含 0.00 服务费';
+  }
+
+  function pay(){
+    const el = document.querySelector('#skus .sku.on');
+    const min = +el.dataset.min, price = el.dataset.price;
+    document.getElementById('i-min').textContent = min + ' 分钟';
+    document.getElementById('i-amt').textContent = '¥' + price;
+    document.getElementById('paid-info').textContent = '支付宝免密 · ¥' + price;
+    document.getElementById('done-title').textContent = '处理中';
+    go('s-done');
+
+    T.total = min * 60;
+    T.left  = Math.min(T.total, 8 * 60 + 47);
+
+    const s2 = document.querySelector('[data-step="2"]');
+    const s3 = document.querySelector('[data-step="3"]');
+    const s4 = document.querySelector('[data-step="4"]');
+
+    s3.classList.add('cur');
+    document.getElementById('sp3').style.display = 'block';
+
+    setTimeout(() => { s2.classList.add('done'); }, 700);
+    setTimeout(() => {
+      s3.querySelector('#sp3').style.display = 'none';
+      s3.classList.remove('cur'); s3.classList.add('done');
+      s3.querySelector('.bullet').textContent = '✓';
+      s4.classList.add('cur');
+      document.getElementById('start-info').textContent = '已下发启动指令';
+    }, 2400);
+    setTimeout(() => {
+      s4.classList.remove('cur'); s4.classList.add('done');
+      s4.querySelector('.bullet').textContent = '✓';
+      document.getElementById('done-title').textContent = '吹风中';
+      document.getElementById('steps-box').style.display = 'none';
+      document.getElementById('running').style.display = 'flex';
+      document.getElementById('done-btn').style.display = 'block';
+      startCountdown();
+    }, 3200);
+  }
+
+  function resetDone(){
+    clearInterval(T.timer);
+    document.querySelectorAll('.step').forEach((s, i) => {
+      s.className = 'step' + (i === 0 ? ' done' : '');
+      const b = s.querySelector('.bullet');
+      b.className = 'bullet';
+      if (i === 2) {
+        b.innerHTML = '<span class="spin" id="sp3" style="display:none"></span>';
+      } else {
+        b.textContent = i === 0 ? '✓' : '';
+      }
+    });
+    document.getElementById('steps-box').style.display = 'block';
+    document.getElementById('running').style.display = 'none';
+    document.getElementById('done-btn').style.display = 'none';
+    document.getElementById('start-info').textContent = '等待设备响应…';
+  }
+
+  function fmt(s){
+    const m = Math.floor(s / 60), ss = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+  }
+
+  // 直接渲染「吹风中」终态（截图/预览用，不跑计时器）
+  function forceRunning(){
+    const el = document.querySelector('#skus .sku.on');
+    const min = +el.dataset.min, price = el.dataset.price;
+    T.total = min * 60; T.left = Math.min(T.total, 8 * 60 + 47);
+    document.getElementById('i-min').textContent = min + ' 分钟';
+    document.getElementById('i-amt').textContent = '¥' + price;
+    document.getElementById('paid-info').textContent = '支付宝免密 · ¥' + price;
+    go('s-done');
+    document.querySelectorAll('.step').forEach(s => {
+      s.classList.add('done');
+      s.querySelector('.bullet').textContent = '✓';
+    });
+    document.getElementById('done-title').textContent = '吹风中';
+    document.getElementById('steps-box').style.display = 'none';
+    document.getElementById('running').style.display = 'flex';
+    document.getElementById('done-btn').style.display = 'block';
+    document.getElementById('count').textContent = fmt(T.left);
+    document.getElementById('prog').style.width = (100 - T.left / T.total * 100) + '%';
+  }
+
+  // 便于单独预览某一屏：#s-home / #s-scan / #s-pay / #s-done / #demo-run / #demo-live
+  (function route(){
+    const h = location.hash.slice(1);
+    if (!h) return;
+    if (h === 'demo-live') { forceRunning(); return; }
+    if (h === 'demo-run') { pick(document.querySelector('#skus .sku.on')); pay(); return; }
+    if (document.getElementById(h)) go(h);
+  })();
+
+  function startCountdown(){
+    const c = document.getElementById('count'), p = document.getElementById('prog');
+    c.textContent = fmt(T.left);
+    p.style.width = (100 - T.left / T.total * 100) + '%';
+    clearInterval(T.timer);
+    T.timer = setInterval(() => {
+      T.left = Math.max(0, T.left - 1);
+      c.textContent = fmt(T.left);
+      p.style.width = (100 - T.left / T.total * 100) + '%';
+      if (T.left === 0) {
+        clearInterval(T.timer);
+        document.getElementById('done-title').textContent = '已完成';
+        document.getElementById('done-btn').textContent = '返回首页';
+      }
+    }, 1000);
+  }
+</script>
+</body>
+</html>
