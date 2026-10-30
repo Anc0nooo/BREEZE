@@ -95,8 +95,10 @@ jobs:
           set -e
           mkdir -p toolchain/keystore
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > toolchain/keystore/breeze-release.jks
+          # storeFile 用绝对路径：本地 keystore.properties 里写的是 ../toolchain/…（工程根在 app/ 下），
+          # 而 CI 里仓库根就是工程根，相对路径会指到仓库外面去。
           {
-            echo "storeFile=../toolchain/keystore/breeze-release.jks"
+            echo "storeFile=$GITHUB_WORKSPACE/toolchain/keystore/breeze-release.jks"
             echo "storePassword=$KS_PASSWORD"
             echo "keyAlias=$KS_ALIAS"
             echo "keyPassword=$KS_KEY_PASSWORD"
