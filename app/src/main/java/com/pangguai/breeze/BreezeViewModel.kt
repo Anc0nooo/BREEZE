@@ -30,7 +30,11 @@ import com.pangguai.breeze.data.formatFen
  */
 class BreezeViewModel(app: Application) : AndroidViewModel(app) {
 
-    var screen by mutableStateOf(Screen.HOME)
+    /**
+     * 启动即 SPLASH：先闭嘴把 DataStore 里的 token 读回来、验一次，
+     * 验过了直接进首页。**不要**先画登录页再跳走，那一帧闪屏很难看。
+     */
+    var screen by mutableStateOf(Screen.SPLASH)
         private set
 
     var phone by mutableStateOf("")
@@ -125,7 +129,6 @@ class BreezeViewModel(app: Application) : AndroidViewModel(app) {
     var repo: BreezeRepo? = (app as? BreezeApp)?.repo
 
     init {
-        screen = Screen.LOGIN
         viewModelScope.launch {
             // 冷启动先把上次的 token 读回来；**必须验一次**——服务端 token 一小时就死，
             // 不验的话用户会先看到首页，然后一扫码才被告知「登录已过期」。
@@ -140,7 +143,11 @@ class BreezeViewModel(app: Application) : AndroidViewModel(app) {
                     r.logout()
                     phoneInput = r.lastPhone
                     toast = "登录已过期，请重新获取验证码"
+                    screen = Screen.LOGIN
                 }
+            } else {
+                r?.lastPhone?.takeIf { it.length == 11 }?.let { phoneInput = it }
+                screen = Screen.LOGIN
             }
         }
         viewModelScope.launch {
@@ -334,6 +341,19 @@ class BreezeViewModel(app: Application) : AndroidViewModel(app) {
     fun backToPay() {
         if (screen == Screen.SCAN) screen = Screen.PAY
         if (screen == Screen.DONE) screen = Screen.PAY
+    }
+
+    /** 首页「吹风中」入口：回到倒计时页。 */
+    fun openRunning() {
+        if (running) screen = Screen.DONE
+    }
+
+    /**
+     * 完成页按返回：正在吹就退回首页但**不停表**（计时是墙钟的，切走不丢，
+     * 首页顶部会留一个「吹风中」入口）；没在吹就是收尾，直接结束。
+     */
+    fun backFromDone() {
+        if (running) screen = Screen.HOME else stop()
     }
 
     fun choosePlan(i: Int) {

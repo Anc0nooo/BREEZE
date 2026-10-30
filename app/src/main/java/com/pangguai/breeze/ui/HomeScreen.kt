@@ -35,6 +35,7 @@ fun HomeScreen(
     onScan: () -> Unit,
     onManual: () -> Unit,
     onHistory: () -> Unit,
+    onRunning: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         // 顶部状态
@@ -71,6 +72,12 @@ fun HomeScreen(
             }
         }
 
+        // 正在吹：给一个回到倒计时页的显眼入口（计时在后台照走）
+        if (vm.running) {
+            Spacer(Modifier.height(18.dp))
+            RunningBanner(vm.remain, onRunning)
+        }
+
         // 主操作
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             BigScanButton(onScan)
@@ -88,6 +95,38 @@ fun HomeScreen(
             Spacer(Modifier.height(10.dp))
         }
         Spacer(Modifier.height(18.dp))
+    }
+}
+
+@Composable
+private fun RunningBanner(remainSec: Int, onClick: () -> Unit) {
+    val m = remainSec / 60
+    val s = remainSec % 60
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Ink.mint.copy(alpha = 0.12f))
+            .border(1.dp, Ink.mint.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(8.dp).clip(CircleShape).background(Ink.mint)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text("正在吹风", color = Ink.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(2.dp))
+            Text("点这里回到倒计时", color = Ink.dim2, fontSize = 10.sp)
+        }
+        Text(
+            "%02d:%02d".format(m, s),
+            color = Ink.mint2,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

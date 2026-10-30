@@ -1,6 +1,6 @@
 package com.pangguai.breeze.data
 
-enum class Screen { LOGIN, HOME, SCAN, PAY, DONE, HISTORY }
+enum class Screen { SPLASH, LOGIN, HOME, SCAN, PAY, DONE, HISTORY }
 
 /** 设备（吹风机）。id 是扫码得到的设备号，名称/区域来自 goods/normal/details 的返回。 */
 data class Device(

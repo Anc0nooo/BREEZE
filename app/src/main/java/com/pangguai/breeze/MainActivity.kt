@@ -3,11 +3,18 @@ package com.pangguai.breeze
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -23,14 +30,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pangguai.breeze.data.Screen
 import com.pangguai.breeze.ui.DoneScreen
-import com.pangguai.breeze.ui.HomeScreen
 import com.pangguai.breeze.ui.HistoryScreen
+import com.pangguai.breeze.ui.HomeScreen
 import com.pangguai.breeze.ui.LoginScreen
 import com.pangguai.breeze.ui.PayScreen
 import com.pangguai.breeze.ui.ScanScreen
+import com.pangguai.breeze.ui.WindGlyph
 import com.pangguai.breeze.ui.theme.BreezeTheme
 import com.pangguai.breeze.ui.theme.Ink
 
@@ -40,7 +51,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             BreezeTheme {
-                Box(Modifier.fillMaxSize().background(Ink.bg)) {
+                // 全面屏（edge-to-edge）下必须自己吃掉状态栏/手势条的高度，
+                // 否则页面顶部的胶囊和返回键会被状态栏盖住、点不到。
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Ink.bg)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                ) {
                     BreezeRoot()
                 }
             }
@@ -61,7 +79,18 @@ fun BreezeRoot(vm: BreezeViewModel = viewModel()) {
         }
     }
 
+    // 返回手势 / 返回键：逐级返回，不要一按就退 App
+    BackHandler {
+        when (vm.screen) {
+            Screen.SPLASH, Screen.LOGIN, Screen.HOME -> (ctx as? android.app.Activity)?.finish()
+            Screen.SCAN, Screen.PAY, Screen.HISTORY -> vm.backHome()
+            Screen.DONE -> vm.backFromDone()
+        }
+    }
+
     when (vm.screen) {
+        Screen.SPLASH -> SplashScreen()
+
         Screen.LOGIN -> LoginScreen(vm = vm)
 
         Screen.HOME -> HomeScreen(
@@ -69,6 +98,7 @@ fun BreezeRoot(vm: BreezeViewModel = viewModel()) {
             onScan = { vm.openScan() },
             onManual = { manualInput = true },
             onHistory = { vm.openHistory() },
+            onRunning = { vm.openRunning() },
         )
 
         Screen.SCAN -> ScanScreen(
@@ -134,5 +164,19 @@ fun BreezeRoot(vm: BreezeViewModel = viewModel()) {
                 TextButton(onClick = { manualInput = false }) { Text("取消") }
             },
         )
+    }
+}
+
+/** 冷启动闪屏：等 DataStore 读 token 的那一两百毫秒，不要先闪一下登录页。 */
+@Composable
+private fun SplashScreen() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            WindGlyph(width = 46.dp, height = 38.dp, color = Ink.mint2)
+            Spacer(Modifier.height(16.dp))
+            Text("轻风", color = Ink.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 6.sp)
+            Spacer(Modifier.height(8.dp))
+            Text("BREEZE · 一键吹风", color = Ink.dim2, fontSize = 10.sp, letterSpacing = 2.sp)
+        }
     }
 }
